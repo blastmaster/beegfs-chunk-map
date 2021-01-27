@@ -17,7 +17,7 @@
 
 // Global values shared between threads
 struct mutexqueue * dir_queue;
-int SKIPCHARS;
+size_t SKIPCHARS;
 
 
 /* Worker thread for listing dirs */
