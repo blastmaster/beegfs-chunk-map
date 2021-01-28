@@ -13,7 +13,7 @@
 
 #undef PROFILE
 #define GETENTRY_THREADS 32
-#define GETENTRY_COMMAND   "cat output.%d | beegfs-ctl --getentryinfo --nomappings --unmounted -"
+#define GETENTRY_COMMAND   "cat output.%d | beegfs-ctl --mount=%s --getentryinfo --nomappings --unmounted -"
 #define PATH_IDENTIFIER    "Path: "
 #define ENTRYID_IDENTIFIER "EntryID: "
 #define LINE_BUFSIZE PATH_MAX
@@ -24,6 +24,7 @@ struct mutexleveldb * db;
 struct arg_struct {
   int thread_id;
   int thread_count;
+  char mount[PATH_MAX];
 };
 
 /* Worker thread for fetching entries */
@@ -49,12 +50,12 @@ void * getentry_worker (void * x) {
     perf_getentry = perf_create("thread", args->thread_id*3+1, 0);
     perf_leveldb  = perf_create("leveldb", args->thread_id*3+2, args->thread_id*3+1);
     perf_strcmp   = perf_create("strcmp", args->thread_id*3+3, args->thread_id*3+1);
-  
+
     perf_update_start(perf_getentry);
   #endif
 
   /* Create cmd */
-  sprintf(cmd, GETENTRY_COMMAND, args->thread_id);
+  sprintf(cmd, GETENTRY_COMMAND, args->thread_id, args->mount);
 
   /* Get a pipe where the output from the scripts comes in */
   pipe = popen(cmd, "r");
@@ -127,14 +128,14 @@ int main(int argc, char *argv[]) {
   #endif
 
   /* Get args */
-  if(argc == 3) {
+  if(argc >= 3) {
     /* Init db */
     db = mutexleveldb_create2(atol(argv[1]), argv[2]);
   } else {
-    printf("Usage: bp-cm-getentry <filecount> <leveldb filename>\n");
+    printf("Usage: bp-cm-getentry <filecount> <leveldb filename> <beegfs-mount>\n");
     exit(1);
   }
- 
+
   #ifdef PROFILE
     perf_global_init();
     perf_main = perf_create("Main", 0, -1);
@@ -147,6 +148,9 @@ int main(int argc, char *argv[]) {
   for(i = 0; i < GETENTRY_THREADS; i++) {
     thread_args[i].thread_id = i;
     thread_args[i].thread_count = GETENTRY_THREADS;
+    if (argc == 4) {
+        strcpy(thread_args[i].mount, argv[3]);
+    }
 
     pthread_create(&threads[i], &attr, getentry_worker, (void *) &thread_args[i]);
   }
