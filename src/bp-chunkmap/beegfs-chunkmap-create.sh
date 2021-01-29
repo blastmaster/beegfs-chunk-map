@@ -62,7 +62,7 @@ echo "Creating file lists ${CACHEDIR}/output.*"
 ${BINDIR}/bp-cm-filelist ${#CONF_BEEGFS_MOUNT} "${DIR}"
 
 if [ ! "$?" -eq 0 ]; then
-        echo "Aborted! Check system consistency!"
+        echo "bp-cm-filelist Aborted! Check system consistency!"
         exit 1
 fi
 
@@ -74,10 +74,10 @@ echo "Total count: ${FILES}"
 echo "Write entries to LevelDB: ${LEVELDB}"
 
 # Get entries and create db
-LD_LIBRARY_PATH=${CONF_LEVELDB_LIBPATH} ${BINDIR}/bp-cm-getentry ${FILES} ${LEVELDB}
+LD_LIBRARY_PATH="${CONF_LEVELDB_LIBPATH}:${LD_LIBRARY_PATH}" ${BINDIR}/bp-cm-getentry ${FILES} ${LEVELDB} ${CONF_BEEGFS_MOUNT} ${CACHEDIR}
 
 if [ ! "$?" -eq 0 ]; then
-        echo "Aborted! Check system consistency!"
+        echo "bp-cm-getentry Aborted! Check system consistency!"
         exit 1
 fi
 
