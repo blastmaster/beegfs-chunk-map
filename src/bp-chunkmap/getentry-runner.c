@@ -14,7 +14,6 @@
 #undef PROFILE
 #define GETENTRY_THREADS 32
 #define GETENTRY_COMMAND   "cat %s/output.%d | beegfs-ctl --mount=%s --getentryinfo --nomappings --unmounted -"
-#define PATH_IDENTIFIER    "Path: "
 #define ENTRYID_IDENTIFIER "EntryID: "
 #define LINE_BUFSIZE PATH_MAX
 
@@ -32,8 +31,10 @@ struct arg_struct {
 void * getentry_worker (void * x) {
 
   char line[LINE_BUFSIZE];
-  long linenr;
+  char out_buf[LINE_BUFSIZE];
   FILE *pipe;
+  FILE *output_file;
+  char output_filename[PATH_MAX];
   char cmd[PATH_MAX];
   struct arg_struct *args = (struct arg_struct *) x;
 
@@ -41,7 +42,6 @@ void * getentry_worker (void * x) {
     perf_entry_t * perf_getentry, * perf_leveldb, * perf_strcmp;
   #endif
 
-  size_t path_identifier_len = strlen(PATH_IDENTIFIER);
   size_t entryid_identifier_len = strlen(ENTRYID_IDENTIFIER);
 
   char path_line[PATH_MAX];
@@ -66,45 +66,55 @@ void * getentry_worker (void * x) {
     exit (EXIT_FAILURE);        /* return with exit code indicating error */
   }
 
+  sprintf(output_filename, "output.%d", args->thread_id);
+  output_file = fopen(output_filename, "r");
+  if (output_file == NULL) {
+      fprintf(stderr, "Failed to open: %s\n", output_filename);
+      exit(EXIT_FAILURE);
+  }
+
   /* Read script output from the pipe line by line */
-  linenr = 1;
   while (fgets(line, LINE_BUFSIZE, pipe) != NULL) {
     #ifdef PROFILE
-      perf_update_start(perf_strcmp);  
+      perf_update_start(perf_strcmp);
     #endif
-    if (strncmp(line, PATH_IDENTIFIER, path_identifier_len) == 0) {
-      strcpy(path_line, line + (int) path_identifier_len);
-      
-      // Remove newline
-      path_line[(int)strlen(path_line)-1] = '\0';	
-    } else if (strncmp(line, ENTRYID_IDENTIFIER, entryid_identifier_len) == 0) {
+    if (strncmp(line, ENTRYID_IDENTIFIER, entryid_identifier_len) == 0) {
       strcpy(entryid_line, line + (int) entryid_identifier_len);
 
       // Remove newline
       entryid_line[(int)strlen(entryid_line)-1] = '\0';
 
+      fgets(out_buf, LINE_BUFSIZE, output_file);
+      strcpy(path_line, out_buf);
+      path_line[(int)strlen(path_line)-1] = '\0';
+
       #ifdef PROFILE
-        perf_update_tick(perf_strcmp);  
+        perf_update_tick(perf_strcmp);
         perf_update_start(perf_leveldb);
       #endif
+
+     if (strlen(entryid_line) <= 0 || strlen(path_line) <= 0) {
+         fprintf(stderr, "ERROR uncomplete data for database insert!\n");
+         continue;
+     }
 
       // Write to db
       mutexleveldb_write2(10000, db, entryid_line, strlen(entryid_line), path_line, strlen(path_line));
 
       #ifdef PROFILE
         perf_update_tick(perf_leveldb);
-        perf_update_start(perf_strcmp);  
+        perf_update_start(perf_strcmp);
       #endif
     }
     #ifdef PROFILE
       perf_update_tick(perf_strcmp);
     #endif
-    ++linenr;
-    
+
   }
-    
+
   /* Once here, out of the loop, the script has ended. */
   pclose(pipe); /* Close the pipe */
+  fclose(output_file);
 
   #ifdef PROFILE
     perf_update_tick(perf_getentry);
@@ -115,7 +125,7 @@ void * getentry_worker (void * x) {
   #endif
 
   pthread_exit(NULL);
-  
+
 }
 
 
