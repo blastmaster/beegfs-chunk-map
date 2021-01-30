@@ -47,4 +47,4 @@ if [ ! "${LEVELDB:0:1}" == "/" ]; then
 fi
 
 # Perform querying
-LD_LIBRARY_PATH=${CONF_LEVELDB_LIBPATH} ${BINDIR}/bp-cm-query ${LEVELDB}
+LD_LIBRARY_PATH="${CONF_LEVELDB_LIBPATH}:${LD_LIBRARY_PATH}" ${BINDIR}/bp-cm-query ${LEVELDB}
